@@ -1,0 +1,303 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>مخزون الكتب - واجهة تجريبية</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="brand">
+      <div class="logo">📚</div>
+      <div>
+        <div class="title">مخزون الكتب</div>
+        <div class="subtitle">بحث • فتح مباشر • تلخيص • قراءة صوتية</div>
+      </div>
+    </div>
+
+    <div class="searchbox">
+      <input id="q" type="search" placeholder="اكتب عنوان/مؤلف/كود ثم Enter..." autocomplete="off" />
+      <button id="btnClear" class="btn ghost" title="مسح">مسح</button>
+      <button id="btnAdmin" class="btn ghost" title="دخول المسؤول">دخول المسؤول</button>
+    </div>
+  </header>
+
+  <!-- شريط أدوات المسؤول (يظهر بعد الدخول فقط) -->
+  <section id="adminBar" class="adminbar" hidden>
+    <div class="admin-left">
+      <span class="badge ok">وضع المسؤول مفعّل</span>
+      <span class="tiny">التخزين: LocalStorage</span>
+    </div>
+    <div class="admin-actions">
+      <button id="btnAddBook" class="btn">إضافة كتاب</button>
+      <button id="btnImportCsv" class="btn">استيراد CSV</button>
+      <button id="btnScan" class="btn">مسح QR/Barcode</button>
+      <button id="btnExportJson" class="btn ghost">تصدير JSON</button>
+      <button id="btnLogout" class="btn ghost">خروج</button>
+    </div>
+  </section>
+
+  <main class="layout">
+    <!-- نتائج البحث -->
+    <section class="panel">
+      <div class="panel-header">
+        <h2>النتائج</h2>
+        <span id="resultCount" class="badge">0</span>
+      </div>
+
+      <div id="results" class="list empty">
+        <div class="empty-state">
+          <div class="empty-emoji">🔎</div>
+          <div class="empty-text">ابدأ بالبحث عن كتاب لفتحه مباشرة.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- القارئ + الأدوات -->
+    <section class="workspace">
+      <div class="workspace-header">
+        <div class="book-meta">
+          <div id="bookTitle" class="book-title">لم يتم اختيار كتاب</div>
+          <div id="bookSub" class="book-sub">اختر كتابًا من النتائج لفتحه</div>
+        </div>
+
+        <div class="actions">
+          <button id="btnOpen" class="btn" disabled>فتح الكتاب</button>
+          <button id="btnSummary" class="btn" disabled>تلخيص</button>
+          <button id="btnTts" class="btn" disabled>قراءة صوتية</button>
+        </div>
+      </div>
+
+      <div class="viewer">
+        <iframe id="frame" title="عارض الكتاب" src="" loading="lazy"></iframe>
+        <div id="viewerHint" class="viewer-hint">
+          <div class="hint-card">
+            <div class="hint-title">👈 اختر كتابًا</div>
+            <div class="hint-text">سيظهر محتوى الكتاب هنا (PDF أو رابط).</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="tools">
+        <!-- تلخيص -->
+        <aside class="tool" id="summaryTool" hidden>
+          <div class="tool-header">
+            <h3>التلخيص</h3>
+            <button class="btn ghost" data-close="summaryTool">إغلاق</button>
+          </div>
+
+          <div class="tool-body">
+            <label class="label">نوع التلخيص</label>
+            <div class="segmented" role="group" aria-label="نوع التلخيص">
+              <button class="seg" data-mode="short">قصير</button>
+              <button class="seg active" data-mode="medium">متوسط</button>
+              <button class="seg" data-mode="detailed">مفصل</button>
+            </div>
+
+            <div class="row">
+              <button id="btnGenerateSummary" class="btn">توليد التلخيص</button>
+              <button id="btnCopySummary" class="btn ghost" disabled>نسخ</button>
+            </div>
+
+            <div id="summaryOut" class="output muted">سيظهر التلخيص هنا…</div>
+
+            <div class="note">
+              ⚠️ التلخيص هنا تجريبي. لاحقًا يُربط بخدمة AI بعد استخراج النص.
+            </div>
+          </div>
+        </aside>
+
+        <!-- قراءة صوتية -->
+        <aside class="tool" id="ttsTool" hidden>
+          <div class="tool-header">
+            <h3>القراءة الصوتية</h3>
+            <button class="btn ghost" data-close="ttsTool">إغلاق</button>
+          </div>
+
+          <div class="tool-body">
+            <label class="label">نص للقراءة (تجريبي)</label>
+            <textarea id="ttsText" rows="5" placeholder="ضع هنا نصًا (أو لاحقًا نستخرجه من PDF)"></textarea>
+
+            <div class="grid2">
+              <div>
+                <label class="label">السرعة</label>
+                <input id="ttsRate" type="range" min="0.6" max="1.6" step="0.1" value="1" />
+                <div class="tiny"><span id="ttsRateVal">1.0</span>x</div>
+              </div>
+              <div>
+                <label class="label">الصوت</label>
+                <select id="voiceSelect"></select>
+              </div>
+            </div>
+
+            <div class="row">
+              <button id="btnSpeak" class="btn">تشغيل</button>
+              <button id="btnPause" class="btn ghost" disabled>إيقاف مؤقت</button>
+              <button id="btnStop" class="btn ghost" disabled>إيقاف</button>
+            </div>
+
+            <div class="note">
+              ℹ️ تعتمد على Web Speech API (قد تختلف الجودة حسب المتصفح).
+            </div>
+          </div>
+        </aside>
+      </div>
+    </section>
+  </main>
+
+  <footer class="footer">
+    <span>واجهة تجريبية • تخزين محلي • قابلة للربط مع API لاحقًا</span>
+  </footer>
+
+  <!-- مودال دخول المسؤول -->
+  <div id="modalAdmin" class="modal" hidden>
+    <div class="modal-backdrop" data-close="modalAdmin"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="دخول المسؤول">
+      <div class="modal-head">
+        <h3>دخول المسؤول</h3>
+        <button class="btn ghost" data-close="modalAdmin">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <label class="label">كلمة السر</label>
+        <input id="adminPass" type="password" placeholder="••••••••" />
+        <div class="row">
+          <button id="btnAdminLogin" class="btn">دخول</button>
+          <span id="adminMsg" class="tiny"></span>
+        </div>
+        <div class="note">
+          ⚠️ كلمة السر هنا داخل الواجهة (MVP) وليست حماية أمنية كاملة.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال إضافة كتاب -->
+  <div id="modalAdd" class="modal" hidden>
+    <div class="modal-backdrop" data-close="modalAdd"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="إضافة كتاب">
+      <div class="modal-head">
+        <h3>إضافة كتاب</h3>
+        <button class="btn ghost" data-close="modalAdd">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <div class="grid2">
+          <div>
+            <label class="label">الكود / ID (إجباري)</label>
+            <input id="fId" placeholder="BK-0001" />
+          </div>
+          <div>
+            <label class="label">اللغة</label>
+            <select id="fLang">
+              <option value="ar">AR</option>
+              <option value="fr">FR</option>
+            </select>
+          </div>
+        </div>
+
+        <label class="label">العنوان (إجباري)</label>
+        <input id="fTitle" placeholder="عنوان الكتاب" />
+
+        <label class="label">المؤلف</label>
+        <input id="fAuthor" placeholder="اسم المؤلف" />
+
+        <div class="grid2">
+          <div>
+            <label class="label">السنة</label>
+            <input id="fYear" type="number" placeholder="2020" />
+          </div>
+          <div>
+            <label class="label">كلمات مفتاحية (افصل بفواصل)</label>
+            <input id="fKeywords" placeholder="قانون, إدارة, ..." />
+          </div>
+        </div>
+
+        <label class="label">رابط الكتاب (URL)</label>
+        <input id="fUrl" placeholder="https://... أو intranet://..." />
+
+        <div class="row">
+          <button id="btnSaveBook" class="btn">حفظ</button>
+          <button id="btnResetBook" class="btn ghost">تفريغ</button>
+          <span id="addMsg" class="tiny"></span>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال استيراد CSV -->
+  <div id="modalImport" class="modal" hidden>
+    <div class="modal-backdrop" data-close="modalImport"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="استيراد CSV">
+      <div class="modal-head">
+        <h3>استيراد CSV</h3>
+        <button class="btn ghost" data-close="modalImport">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <div class="note">
+          صيغة الأعمدة المقترحة:
+          <b>id,title,author,year,language,fileUrl,keywords</b>
+          <br/>keywords: كلمات مفصولة بـ | أو فاصلة.
+        </div>
+
+        <input id="csvFile" type="file" accept=".csv,text/csv" />
+
+        <div class="row">
+          <button id="btnPreviewCsv" class="btn">معاينة</button>
+          <button id="btnApplyCsv" class="btn" disabled>اعتماد الاستيراد</button>
+          <span id="importMsg" class="tiny"></span>
+        </div>
+
+        <div id="csvPreview" class="output muted">ستظهر المعاينة هنا…</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال المسح -->
+  <div id="modalScan" class="modal" hidden>
+    <div class="modal-backdrop" data-close="modalScan"></div>
+    <div class="modal-card wide" role="dialog" aria-modal="true" aria-label="مسح QR/Barcode">
+      <div class="modal-head">
+        <h3>مسح QR/Barcode</h3>
+        <button class="btn ghost" data-close="modalScan">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <div class="note">
+          يدعم المسح عبر <b>BarcodeDetector</b> إذا كان المتصفح يدعمه.
+          إذا لم يدعم، استخدم الإدخال اليدوي أسفل.
+        </div>
+
+        <div class="scan-grid">
+          <div class="scan-box">
+            <video id="scanVideo" playsinline></video>
+            <div class="scan-overlay">وجّه الكاميرا نحو QR/Barcode</div>
+          </div>
+
+          <div>
+            <label class="label">الناتج</label>
+            <div id="scanOut" class="output muted">بانتظار المسح…</div>
+
+            <label class="label">أو ألصق قيمة QR يدويًا</label>
+            <input id="scanManual" placeholder='مثال: BK-001|عنوان|https://...' />
+
+            <div class="row">
+              <button id="btnStartScan" class="btn">بدء</button>
+              <button id="btnStopScan" class="btn ghost" disabled>إيقاف</button>
+              <button id="btnUseScan" class="btn" disabled>استخدام وإضافة</button>
+            </div>
+
+            <div class="note">
+              صيغ مدعومة:
+              <br/>1) رابط فقط: https://...
+              <br/>2) نص: <b>ID|Title|URL</b>
+              <br/>3) JSON: {"id":"...","title":"...","url":"..."}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
