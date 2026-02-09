@@ -7,19 +7,31 @@
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
+
+  <!-- ✅ عنوان أعلى الصفحة -->
+  <section class="page-title" aria-label="عنوان الصفحة">
+    <div class="page-title-text">المكتبة الذكية</div>
+    <span class="page-title-underline"></span>
+  </section>
+
   <header class="topbar">
     <div class="brand">
       <div class="logo">📚</div>
       <div>
-        <div class="title">المكتبة الذّكيّة</div>
+        <div class="title">مخزون الكتب</div>
         <div class="subtitle">بحث • فتح مباشر • تلخيص • قراءة صوتية</div>
       </div>
     </div>
 
     <div class="searchbox">
       <input id="q" type="search" placeholder="اكتب عنوان/مؤلف/كود ثم Enter..." autocomplete="off" />
-      <button id="btnClear" class="btn ghost" title="مسح">مسح</button>
-      <button id="btnAdmin" class="btn ghost" title="دخول المسؤول">دخول المسؤول</button>
+
+      <button id="btnClear" class="btn ghost btn-soft" title="مسح">مسح</button>
+
+      <!-- ✅ زر الرجوع للصفحة الرئيسية (بنفس حجم أيقونة الكتب) -->
+      <a href="index.html" class="btn ghost icon-btn" title="الرجوع إلى الصفحة الرئيسية" aria-label="الصفحة الرئيسية">↩</a>
+
+      <button id="btnAdmin" class="btn ghost btn-admin" title="دخول المسؤول">دخول المسؤول</button>
     </div>
   </header>
 
@@ -31,10 +43,14 @@
     </div>
     <div class="admin-actions">
       <button id="btnAddBook" class="btn">إضافة كتاب</button>
-      <button id="btnImportCsv" class="btn">استيراد CSV</button>
+      <button id="btnImportCsv" class="btn ghost btn-accent">استيراد CSV</button>
       <button id="btnScan" class="btn">مسح QR/Barcode</button>
-      <button id="btnExportJson" class="btn ghost">تصدير JSON</button>
-      <button id="btnLogout" class="btn ghost">خروج</button>
+      <button id="btnExportJson" class="btn ghost btn-soft">تصدير JSON</button>
+
+      <button id="btnManageBooks" class="btn ghost btn-accent">إدارة الكتب</button>
+      <button id="btnChangePass" class="btn ghost btn-admin">تغيير كلمة السر</button>
+
+      <button id="btnLogout" class="btn ghost btn-danger">خروج</button>
     </div>
   </section>
 
@@ -64,8 +80,8 @@
 
         <div class="actions">
           <button id="btnOpen" class="btn" disabled>فتح الكتاب</button>
-          <button id="btnSummary" class="btn" disabled>تلخيص</button>
-          <button id="btnTts" class="btn" disabled>قراءة صوتية</button>
+          <button id="btnSummary" class="btn ghost btn-accent" disabled>تلخيص</button>
+          <button id="btnTts" class="btn ghost btn-tts" disabled>قراءة صوتية</button>
         </div>
       </div>
 
@@ -84,7 +100,7 @@
         <aside class="tool" id="summaryTool" hidden>
           <div class="tool-header">
             <h3>التلخيص</h3>
-            <button class="btn ghost" data-close="summaryTool">إغلاق</button>
+            <button class="btn ghost btn-soft" data-close="summaryTool">إغلاق</button>
           </div>
 
           <div class="tool-body">
@@ -97,7 +113,7 @@
 
             <div class="row">
               <button id="btnGenerateSummary" class="btn">توليد التلخيص</button>
-              <button id="btnCopySummary" class="btn ghost" disabled>نسخ</button>
+              <button id="btnCopySummary" class="btn ghost btn-accent" disabled>نسخ</button>
             </div>
 
             <div id="summaryOut" class="output muted">سيظهر التلخيص هنا…</div>
@@ -112,7 +128,7 @@
         <aside class="tool" id="ttsTool" hidden>
           <div class="tool-header">
             <h3>القراءة الصوتية</h3>
-            <button class="btn ghost" data-close="ttsTool">إغلاق</button>
+            <button class="btn ghost btn-soft" data-close="ttsTool">إغلاق</button>
           </div>
 
           <div class="tool-body">
@@ -133,8 +149,8 @@
 
             <div class="row">
               <button id="btnSpeak" class="btn">تشغيل</button>
-              <button id="btnPause" class="btn ghost" disabled>إيقاف مؤقت</button>
-              <button id="btnStop" class="btn ghost" disabled>إيقاف</button>
+              <button id="btnPause" class="btn ghost btn-accent" disabled>إيقاف مؤقت</button>
+              <button id="btnStop" class="btn ghost btn-danger" disabled>إيقاف</button>
             </div>
 
             <div class="note">
@@ -156,7 +172,7 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-label="دخول المسؤول">
       <div class="modal-head">
         <h3>دخول المسؤول</h3>
-        <button class="btn ghost" data-close="modalAdmin">إغلاق</button>
+        <button class="btn ghost btn-soft" data-close="modalAdmin">إغلاق</button>
       </div>
       <div class="modal-body">
         <label class="label">كلمة السر</label>
@@ -172,13 +188,67 @@
     </div>
   </div>
 
+  <!-- مودال تغيير كلمة السر -->
+  <div id="modalPass" class="modal" hidden>
+    <div class="modal-backdrop" data-close="modalPass"></div>
+    <div class="modal-card" role="dialog" aria-modal="true" aria-label="تغيير كلمة السر">
+      <div class="modal-head">
+        <h3>تغيير كلمة السر</h3>
+        <button class="btn ghost btn-soft" data-close="modalPass">إغلاق</button>
+      </div>
+      <div class="modal-body">
+        <label class="label">كلمة السر الحالية</label>
+        <input id="oldPass" type="password" placeholder="••••••••" />
+
+        <label class="label">كلمة السر الجديدة</label>
+        <input id="newPass" type="password" placeholder="••••••••" />
+
+        <label class="label">تأكيد كلمة السر الجديدة</label>
+        <input id="newPass2" type="password" placeholder="••••••••" />
+
+        <div class="row">
+          <button id="btnSavePass" class="btn">حفظ التغيير</button>
+          <span id="passMsg" class="tiny"></span>
+        </div>
+
+        <div class="note">
+          ⚠️ تُخزَّن كلمة السر محليًا داخل المتصفح (LocalStorage) — تجريبي.
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- مودال إدارة الكتب -->
+  <div id="modalManageBooks" class="modal" hidden>
+    <div class="modal-backdrop" data-close="modalManageBooks"></div>
+    <div class="modal-card wide" role="dialog" aria-modal="true" aria-label="إدارة الكتب">
+      <div class="modal-head">
+        <h3>إدارة الكتب</h3>
+        <button class="btn ghost btn-soft" data-close="modalManageBooks">إغلاق</button>
+      </div>
+
+      <div class="modal-body">
+        <div class="manage-top">
+          <input id="manageQ" type="search" placeholder="بحث داخل القائمة (ID / عنوان / مؤلف)..." />
+          <span id="manageCount" class="badge">0</span>
+        </div>
+
+        <div id="manageList" class="manage-list"></div>
+
+        <div class="note">
+          ✅ كل كتاب يحتوي: معلومات كاملة + زر تعديل + زر حذف + زر حفظ (يظهر أثناء التعديل).
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- مودال إضافة كتاب -->
   <div id="modalAdd" class="modal" hidden>
     <div class="modal-backdrop" data-close="modalAdd"></div>
     <div class="modal-card" role="dialog" aria-modal="true" aria-label="إضافة كتاب">
       <div class="modal-head">
         <h3>إضافة كتاب</h3>
-        <button class="btn ghost" data-close="modalAdd">إغلاق</button>
+        <button class="btn ghost btn-soft" data-close="modalAdd">إغلاق</button>
       </div>
       <div class="modal-body">
         <div class="grid2">
@@ -217,7 +287,7 @@
 
         <div class="row">
           <button id="btnSaveBook" class="btn">حفظ</button>
-          <button id="btnResetBook" class="btn ghost">تفريغ</button>
+          <button id="btnResetBook" class="btn ghost btn-soft">تفريغ</button>
           <span id="addMsg" class="tiny"></span>
         </div>
       </div>
@@ -230,7 +300,7 @@
     <div class="modal-card" role="dialog" aria-modal="true" aria-label="استيراد CSV">
       <div class="modal-head">
         <h3>استيراد CSV</h3>
-        <button class="btn ghost" data-close="modalImport">إغلاق</button>
+        <button class="btn ghost btn-soft" data-close="modalImport">إغلاق</button>
       </div>
       <div class="modal-body">
         <div class="note">
@@ -258,7 +328,7 @@
     <div class="modal-card wide" role="dialog" aria-modal="true" aria-label="مسح QR/Barcode">
       <div class="modal-head">
         <h3>مسح QR/Barcode</h3>
-        <button class="btn ghost" data-close="modalScan">إغلاق</button>
+        <button class="btn ghost btn-soft" data-close="modalScan">إغلاق</button>
       </div>
       <div class="modal-body">
         <div class="note">
@@ -281,7 +351,7 @@
 
             <div class="row">
               <button id="btnStartScan" class="btn">بدء</button>
-              <button id="btnStopScan" class="btn ghost" disabled>إيقاف</button>
+              <button id="btnStopScan" class="btn ghost btn-accent" disabled>إيقاف</button>
               <button id="btnUseScan" class="btn" disabled>استخدام وإضافة</button>
             </div>
 
