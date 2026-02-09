@@ -3,8 +3,10 @@
 // ===== إعدادات =====
 const LS_KEY = "LIB_BOOKS_V1";
 const ADMIN_SESSION_KEY = "LIB_ADMIN_ON";
-// ملاحظة: كلمة السر هنا داخل الواجهة (MVP)
-const ADMIN_PASSWORD = "admin123";
+
+// ✅ كلمة سر قابلة للتغيير
+const ADMIN_PASS_KEY = "LIB_ADMIN_PASS_V1";
+const DEFAULT_ADMIN_PASSWORD = "admin123";
 
 // ===== بيانات افتراضية (إذا لا يوجد تخزين محلي بعد) =====
 const DEFAULT_BOOKS = [
@@ -67,6 +69,22 @@ const $btnScan = $("btnScan");
 const $btnExportJson = $("btnExportJson");
 const $btnLogout = $("btnLogout");
 
+// ✅ إدارة الكتب
+const $btnManageBooks = $("btnManageBooks");
+const $modalManageBooks = $("modalManageBooks");
+const $manageQ = $("manageQ");
+const $manageCount = $("manageCount");
+const $manageList = $("manageList");
+
+// Password modal
+const $btnChangePass = $("btnChangePass");
+const $modalPass = $("modalPass");
+const $oldPass = $("oldPass");
+const $newPass = $("newPass");
+const $newPass2 = $("newPass2");
+const $btnSavePass = $("btnSavePass");
+const $passMsg = $("passMsg");
+
 // Modals
 const $modalAdmin = $("modalAdmin");
 const $adminPass = $("adminPass");
@@ -126,7 +144,6 @@ function escapeHtml(str) {
 }
 function isValidUrl(url) {
   try {
-    // يقبل http/https + مسارات intranet:// كـURL مخصص (لن ينجح مع URL() دائمًا)
     if (!url) return false;
     const u = url.trim();
     if (u.startsWith("intranet://") || u.startsWith("file://")) return true;
@@ -140,7 +157,41 @@ function nowIdFallback() {
   return `BK-${Math.floor(Math.random()*90000+10000)}`;
 }
 
-// ===== LocalStorage =====
+// ===== كلمة السر (LocalStorage) =====
+function getAdminPassword() {
+  const saved = (localStorage.getItem(ADMIN_PASS_KEY) || "").trim();
+  return saved || DEFAULT_ADMIN_PASSWORD;
+}
+function setAdminPassword(newPass) {
+  localStorage.setItem(ADMIN_PASS_KEY, String(newPass || "").trim());
+}
+function resetPassForm() {
+  if ($oldPass) $oldPass.value = "";
+  if ($newPass) $newPass.value = "";
+  if ($newPass2) $newPass2.value = "";
+  if ($passMsg) $passMsg.textContent = "";
+}
+function changeAdminPassword() {
+  if (!adminRequire()) return;
+
+  const oldP = ($oldPass.value || "").trim();
+  const newP = ($newPass.value || "").trim();
+  const newP2 = ($newPass2.value || "").trim();
+
+  if (oldP !== getAdminPassword()) { $passMsg.textContent = "كلمة السر الحالية غير صحيحة."; return; }
+  if (!newP) { $passMsg.textContent = "أدخل كلمة السر الجديدة."; return; }
+  if (newP.length < 6) { $passMsg.textContent = "كلمة السر الجديدة قصيرة (على الأقل 6 أحرف)."; return; }
+  if (newP !== newP2) { $passMsg.textContent = "التأكيد لا يطابق كلمة السر الجديدة."; return; }
+
+  setAdminPassword(newP);
+  $passMsg.textContent = "تم تغيير كلمة السر ✓";
+  setTimeout(() => {
+    resetPassForm();
+    closeModal($modalPass);
+  }, 900);
+}
+
+// ===== LocalStorage (كتب) =====
 function loadBooks() {
   const raw = localStorage.getItem(LS_KEY);
   if (!raw) {
@@ -389,7 +440,7 @@ function adminRequire() {
 }
 function adminLogin() {
   const pass = ($adminPass.value || "").trim();
-  if (pass === ADMIN_PASSWORD) {
+  if (pass === getAdminPassword()) {
     setAdminOn(true);
     $adminPass.value = "";
     $adminMsg.textContent = "";
@@ -403,6 +454,219 @@ function adminLogout() {
   closeModal($modalAdd);
   closeModal($modalImport);
   closeModal($modalScan);
+  closeModal($modalPass);
+  closeModal($modalManageBooks);
+}
+
+// ===== إدارة الكتب (قائمة + تعديل + حذف + حفظ) =====
+let manageEditingId = null; // ID للكتاب الذي يتم تعديله الآن
+
+function parseKeywords(s) {
+  const raw = (s || "").trim();
+  if (!raw) return [];
+  return raw
+    .split(/[,|]/g)
+    .map(x => x.trim())
+    .filter(Boolean);
+}
+
+function renderManageBooksList() {
+  if (!$manageList) return;
+
+  const q = ($manageQ?.value || "").trim();
+  const list = filterBooks(q);
+
+  if ($manageCount) $manageCount.textContent = String(list.length);
+
+  // رأس الجدول (ثابت)
+  $manageList.innerHTML = "";
+  const head = document.createElement("div");
+  head.className = "manage-row head";
+  head.innerHTML = `
+    <div class="manage-cell">ID</div>
+    <div class="manage-cell">العنوان</div>
+    <div class="manage-cell">المؤلف</div>
+    <div class="manage-cell">السنة</div>
+    <div class="manage-cell">اللغة</div>
+    <div class="manage-cell">الكلمات</div>
+    <div class="manage-cell">الرابط</div>
+    <div class="manage-cell">إجراءات</div>
+  `;
+  $manageList.appendChild(head);
+
+  if (!list.length) {
+    const empty = document.createElement("div");
+    empty.className = "manage-row";
+    empty.innerHTML = `<div class="manage-cell manage-small" style="grid-column:1/-1;">لا توجد كتب.</div>`;
+    $manageList.appendChild(empty);
+    return;
+  }
+
+  list.forEach(book => {
+    const isEdit = manageEditingId === book.id;
+
+    const row = document.createElement("div");
+    row.className = "manage-row";
+    row.dataset.id = book.id;
+
+    // خلايا (Inputs)
+    const cId = document.createElement("div");
+    cId.className = "manage-cell";
+    const inId = document.createElement("input");
+    inId.value = book.id || "";
+    inId.disabled = true; // ID ثابت
+    cId.appendChild(inId);
+
+    const cTitle = document.createElement("div");
+    cTitle.className = "manage-cell";
+    const inTitle = document.createElement("input");
+    inTitle.value = book.title || "";
+    inTitle.disabled = !isEdit;
+    cTitle.appendChild(inTitle);
+
+    const cAuthor = document.createElement("div");
+    cAuthor.className = "manage-cell";
+    const inAuthor = document.createElement("input");
+    inAuthor.value = book.author || "";
+    inAuthor.disabled = !isEdit;
+    cAuthor.appendChild(inAuthor);
+
+    const cYear = document.createElement("div");
+    cYear.className = "manage-cell";
+    const inYear = document.createElement("input");
+    inYear.type = "number";
+    inYear.value = book.year || "";
+    inYear.disabled = !isEdit;
+    cYear.appendChild(inYear);
+
+    const cLang = document.createElement("div");
+    cLang.className = "manage-cell";
+    const selLang = document.createElement("select");
+    selLang.innerHTML = `
+      <option value="ar">AR</option>
+      <option value="fr">FR</option>
+    `;
+    selLang.value = (book.language || "ar").toLowerCase();
+    selLang.disabled = !isEdit;
+    cLang.appendChild(selLang);
+
+    const cKw = document.createElement("div");
+    cKw.className = "manage-cell";
+    const inKw = document.createElement("input");
+    inKw.value = (book.keywords || []).join(", ");
+    inKw.disabled = !isEdit;
+    cKw.appendChild(inKw);
+
+    const cUrl = document.createElement("div");
+    cUrl.className = "manage-cell";
+    const inUrl = document.createElement("input");
+    inUrl.value = book.fileUrl || "";
+    inUrl.disabled = !isEdit;
+    cUrl.appendChild(inUrl);
+
+    // إجراءات
+    const cAct = document.createElement("div");
+    cAct.className = "manage-cell";
+
+    const actWrap = document.createElement("div");
+    actWrap.className = "manage-actions";
+
+    const btnEdit = document.createElement("button");
+    btnEdit.className = "btn ghost";
+    btnEdit.type = "button";
+    btnEdit.textContent = isEdit ? "إلغاء" : "تعديل";
+
+    const btnDelete = document.createElement("button");
+    btnDelete.className = "btn ghost";
+    btnDelete.type = "button";
+    btnDelete.textContent = "حذف";
+
+    const btnSave = document.createElement("button");
+    btnSave.className = "btn";
+    btnSave.type = "button";
+    btnSave.textContent = "حفظ";
+    btnSave.disabled = !isEdit;
+
+    btnEdit.addEventListener("click", () => {
+      if (!adminRequire()) return;
+      manageEditingId = isEdit ? null : book.id;
+      renderManageBooksList();
+    });
+
+    btnDelete.addEventListener("click", () => {
+      if (!adminRequire()) return;
+      const ok = confirm(`هل أنت متأكد من حذف الكتاب:\n${book.title}\n(${book.id}) ؟`);
+      if (!ok) return;
+
+      // حذف من القائمة
+      books = books.filter(b => b.id !== book.id);
+      saveBooks();
+
+      // إذا كان هذا هو المختار
+      if (selectedBook && selectedBook.id === book.id) {
+        selectBook(null);
+      }
+
+      // تحديث الواجهات
+      manageEditingId = null;
+      renderResults(filterBooks($q.value));
+      renderManageBooksList();
+    });
+
+    btnSave.addEventListener("click", () => {
+      if (!adminRequire()) return;
+
+      const newTitle = (inTitle.value || "").trim();
+      const newUrl = (inUrl.value || "").trim();
+
+      if (!newTitle) { alert("العنوان مطلوب."); return; }
+      if (!newUrl) { alert("الرابط مطلوب."); return; }
+      if (!isValidUrl(newUrl)) { alert("الرابط غير صالح."); return; }
+
+      const idx = books.findIndex(b => b.id === book.id);
+      if (idx < 0) return;
+
+      const updated = {
+        ...books[idx],
+        title: newTitle,
+        author: (inAuthor.value || "").trim(),
+        year: Number((inYear.value || "").trim()) || undefined,
+        language: (selLang.value || "ar").trim(),
+        keywords: parseKeywords(inKw.value),
+        fileUrl: newUrl
+      };
+
+      books[idx] = updated;
+      saveBooks();
+
+      // إذا هو المختار، حدّثه كذلك
+      if (selectedBook && selectedBook.id === updated.id) {
+        selectedBook = updated;
+        selectBook(updated);
+      }
+
+      manageEditingId = null;
+      renderResults(filterBooks($q.value));
+      renderManageBooksList();
+      alert("تم الحفظ ✓");
+    });
+
+    actWrap.appendChild(btnEdit);
+    actWrap.appendChild(btnDelete);
+    actWrap.appendChild(btnSave);
+    cAct.appendChild(actWrap);
+
+    row.appendChild(cId);
+    row.appendChild(cTitle);
+    row.appendChild(cAuthor);
+    row.appendChild(cYear);
+    row.appendChild(cLang);
+    row.appendChild(cKw);
+    row.appendChild(cUrl);
+    row.appendChild(cAct);
+
+    $manageList.appendChild(row);
+  });
 }
 
 // ===== إضافة كتاب =====
@@ -415,14 +679,6 @@ function resetAddForm() {
   $fKeywords.value = "";
   $fUrl.value = "";
   $addMsg.textContent = "";
-}
-function parseKeywords(s) {
-  const raw = (s || "").trim();
-  if (!raw) return [];
-  return raw
-    .split(/[,|]/g)
-    .map(x => x.trim())
-    .filter(Boolean);
 }
 function addBookFromForm() {
   $addMsg.textContent = "";
@@ -445,14 +701,13 @@ function addBookFromForm() {
   books.unshift({ id, title, author, year, language, fileUrl, keywords });
   saveBooks();
 
-  // تحديث واجهة
   renderResults(filterBooks($q.value));
+  renderManageBooksList();
   $addMsg.textContent = "تمت الإضافة ✓";
   setTimeout(() => { $addMsg.textContent = ""; }, 1000);
 }
 
 // ===== استيراد CSV =====
-// CSV بسيط: يفصل بـ , مع دعم "quotes"
 function parseCsv(text) {
   const rows = [];
   let cur = "";
@@ -484,7 +739,6 @@ function parseCsv(text) {
   }
   pushCell(); pushRow();
 
-  // حذف صفوف فارغة
   return rows.filter(r => r.some(c => (c || "").trim() !== ""));
 }
 function mapCsvRowsToBooks(rows) {
@@ -534,7 +788,6 @@ async function previewCsv() {
     return;
   }
 
-  // تحقق من وجود الأعمدة الأساسية
   const header = rows[0].map(h => normalize(h));
   const required = ["id","title","fileurl"];
   const missing = required.filter(x => !header.includes(x));
@@ -562,7 +815,6 @@ function applyCsv() {
 
   const incoming = mapCsvRowsToBooks(csvParsedRows);
 
-  // تحقق ودمج: تجاهل IDs المكررة داخل النظام
   let added = 0;
   let skipped = 0;
 
@@ -576,6 +828,7 @@ function applyCsv() {
 
   saveBooks();
   renderResults(filterBooks($q.value));
+  renderManageBooksList();
   $importMsg.textContent = `تمت الإضافة: ${added} | تم التجاهل: ${skipped}`;
   $btnApplyCsv.disabled = true;
 }
@@ -608,7 +861,6 @@ async function startScan() {
   $btnUseScan.disabled = true;
   lastScanValue = "";
 
-  // تشغيل الكاميرا
   try {
     scanStream = await navigator.mediaDevices.getUserMedia({
       video: { facingMode: "environment" },
@@ -623,7 +875,6 @@ async function startScan() {
     return;
   }
 
-  // BarcodeDetector إن كان مدعومًا
   if (!("BarcodeDetector" in window)) {
     setScanOut("المتصفح لا يدعم BarcodeDetector. استخدم الإدخال اليدوي.", true);
     return;
@@ -631,7 +882,6 @@ async function startScan() {
 
   let detector = null;
   try {
-    // نطلب أكثر الأنواع شيوعًا
     const formats = ["qr_code","code_128","ean_13","ean_8","code_39"];
     detector = new BarcodeDetector({ formats });
   } catch {
@@ -639,7 +889,6 @@ async function startScan() {
     return;
   }
 
-  // حلقة مسح بسيطة كل 350ms
   scanTimer = setInterval(async () => {
     try {
       if (!$scanVideo.videoWidth) return;
@@ -652,9 +901,7 @@ async function startScan() {
           $btnUseScan.disabled = false;
         }
       }
-    } catch {
-      // تجاهل
-    }
+    } catch {}
   }, 350);
 }
 
@@ -676,7 +923,6 @@ function parseScanPayload(payload) {
   const raw = (payload || "").trim();
   if (!raw) return null;
 
-  // JSON؟
   if (raw.startsWith("{") && raw.endsWith("}")) {
     try {
       const obj = JSON.parse(raw);
@@ -687,7 +933,6 @@ function parseScanPayload(payload) {
     } catch {}
   }
 
-  // صيغة ID|Title|URL
   if (raw.includes("|")) {
     const parts = raw.split("|").map(x => x.trim());
     if (parts.length >= 3) {
@@ -695,7 +940,6 @@ function parseScanPayload(payload) {
     }
   }
 
-  // رابط فقط
   if (isValidUrl(raw)) {
     return { id: "", title: "", url: raw };
   }
@@ -711,7 +955,6 @@ function useScanValue() {
     return;
   }
 
-  // املأ فورم الإضافة ثم افتحه
   if (!adminRequire()) return;
 
   openModal($modalAdd);
@@ -799,6 +1042,32 @@ $btnExportJson.addEventListener("click", () => {
   exportJson();
 });
 
+// ✅ إدارة الكتب: فتح المودال + رسم القائمة
+if ($btnManageBooks) {
+  $btnManageBooks.addEventListener("click", () => {
+    if (!adminRequire()) return;
+    manageEditingId = null;
+    if ($manageQ) $manageQ.value = "";
+    openModal($modalManageBooks);
+    renderManageBooksList();
+  });
+}
+if ($manageQ) {
+  $manageQ.addEventListener("input", () => renderManageBooksList());
+}
+
+// تغيير كلمة السر
+if ($btnChangePass) {
+  $btnChangePass.addEventListener("click", () => {
+    if (!adminRequire()) return;
+    resetPassForm();
+    openModal($modalPass);
+  });
+}
+if ($btnSavePass) $btnSavePass.addEventListener("click", changeAdminPassword);
+if ($newPass2) $newPass2.addEventListener("keydown", (e) => { if (e.key === "Enter") changeAdminPassword(); });
+
+// حفظ كتاب (إضافة)
 $btnSaveBook.addEventListener("click", () => {
   if (!adminRequire()) return;
   addBookFromForm();
@@ -822,9 +1091,7 @@ $btnUseScan.addEventListener("click", () => { useScanValue(); });
 // عند إغلاق مودال المسح: أوقف الكاميرا
 $modalScan.addEventListener("click", (e) => {
   const tgt = e.target;
-  if (tgt && tgt.classList.contains("modal-backdrop")) {
-    stopScan();
-  }
+  if (tgt && tgt.classList.contains("modal-backdrop")) stopScan();
 });
 document.querySelectorAll('[data-close="modalScan"]').forEach(btn => {
   btn.addEventListener("click", () => stopScan());
